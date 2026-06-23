@@ -52,6 +52,9 @@ public:
     }
   }
 
+  uint64_t getBlackPieces() const { return black_pieces; }
+  uint64_t getWhitePieces() const { return white_pieces; }
+
   // Setters
   void setPiece(std::size_t row, std::size_t col, Color color) {
     if (color == Color::BLACK) black_pieces |= (1ULL << getIndex(row, col));
