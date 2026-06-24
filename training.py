@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
             # get network predictions for the whole batch
             with torch.no_grad():
-                logits = model(state_tensor)
+                logits, _ = model(state_tensor)
 
             # apply action mask
             logits[~valid_tensor.bool()] = -float("inf")
@@ -136,8 +136,9 @@ if __name__ == "__main__":
         # training (policy gradient)
         model.train() # turn batch norm tracking back on for the update
         
-        # feed batch of boards to network to get logits with gradients
-        batch_logits = model(batch_states)
+        # feed batch of boards to network to get logits and values with gradients
+        batch_logits, batch_values = model(batch_states)
+        batch_values = batch_values.squeeze(-1) # make it 1D to match batch_rewards shape
         
         # apply action mask to training logits so invalid actions don't explode the loss
         batch_logits[~batch_valid_masks.bool()] = -float("inf")
@@ -148,14 +149,24 @@ if __name__ == "__main__":
         # extract the log-probabilities of actions played
         action_log_probs = log_probs[range(len(batch_actions)), batch_actions]
 
-        # calculate loss: multiply log-probabilities by rewards
-        loss = -(action_log_probs * batch_rewards).mean()
+        # actual reward - predicted value
+        # detach batch_values so the policy gradient doesn't update the value network
+        advantages = batch_rewards - batch_values.detach()
+
+        # policy loss using advantages instead of raw rewards
+        policy_loss = -(action_log_probs * advantages).mean()
+
+        # mean squared error between predicted value and actual reward
+        value_loss = torch.nn.functional.mse_loss(batch_values, batch_rewards)
+
+        # total loss = sum of policy + value losses
+        loss = policy_loss + value_loss
 
         # backpropagation 
         optimizer.zero_grad()  # clear old math
         loss.backward()        # calculate weight adjustments
         optimizer.step()       # apply adjustments
 
-        print(f"Games {current_episode + 1} to {current_episode + NUM_ENVS}: Loss: {loss.item():.4f}")
+        print(f"Games {current_episode + 1} to {current_episode + NUM_ENVS}: Policy Loss: {policy_loss.item():.4f}, Value Loss: {value_loss.item():.4f}")
 
     torch.save(model.state_dict(), "reversi_model.pth")

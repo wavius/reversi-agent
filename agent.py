@@ -66,19 +66,34 @@ class ReversiNet(nn.Module):
         # decision maker: linear neural layer
         # in_features: channels * rows * columns (64 * 8 * 8)
         # out_features: 64 squares (probabilities for next move)
-        # todo: add a value_head to predict winning/losing
         self.policy_head = nn.Linear(2 * BOARD_SIZE * BOARD_SIZE, 64)
+
+        # value head: evaluates the board state
+        self.value_conv = nn.Conv2d(in_channels=channels, out_channels=1, kernel_size=1)
+        self.value_flatten = nn.Flatten()
+        self.value_head = nn.Sequential(
+            nn.Linear(BOARD_SIZE * BOARD_SIZE, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1),
+            nn.Tanh() # maps value between -1 and 1
+        )
 
     def forward(self, x):
         # extract features from the board tensor
         x = self.initial_conv(x)
         x = self.res_blocks(x)
 
-        x = self.policy_conv(x)
-        x = self.policy_flatten(x)
-        x = self.policy_head(x)
+        # compute policy (move probabilities)
+        p = self.policy_conv(x)
+        p = self.policy_flatten(p)
+        logits = self.policy_head(p)
 
-        return x
+        # compute value (win/loss prediction)
+        v = self.value_conv(x)
+        v = self.value_flatten(v)
+        value = self.value_head(v)
+
+        return logits, value
 
 def make_move(model, board, current_player, device):
     """
@@ -109,7 +124,7 @@ def make_move(model, board, current_player, device):
     valid_tensor = ((v_tensor & shifts) != 0).float().to(device)
 
     with torch.no_grad():
-        logits = model(state_tensor)
+        logits, _ = model(state_tensor) # ignore value prediction for now
         logits[~valid_tensor.bool()] = -float("inf")
         action = torch.argmax(logits, dim=1).item()
     
