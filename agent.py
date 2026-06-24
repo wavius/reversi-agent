@@ -21,9 +21,12 @@ class ResBlock(nn.Module):
         # in/out_channels: depth of data
         # kernel_size: size of sliding filter window
         # padding: zeroed border around input grid
-        self.conv1 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(channels)
         self.relu1 = nn.ReLU()
-        self.conv2 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
+        
+        self.conv2 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(channels)
         self.relu2 = nn.ReLU()
 
     # save for Residual connection
@@ -32,8 +35,11 @@ class ResBlock(nn.Module):
 
         # pass through two conv layers
         out = self.conv1(x)
+        out = self.bn1(out)
         out = self.relu1(out)
+        
         out = self.conv2(out)
+        out = self.bn2(out)
         
         # add input to the output
         out += identity
@@ -47,7 +53,8 @@ class ReversiNet(nn.Module):
         super().__init__()
 
         self.initial_conv = nn.Sequential(
-            nn.Conv2d(in_channels=2, out_channels=channels, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=2, out_channels=channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(channels),
             # rectified linear unit: f(x) = max(0, x)
             nn.ReLU(),
         )
@@ -118,6 +125,7 @@ for episode_batch in range(EPISODES // NUM_ENVS):
     memory_states = [[] for _ in range(NUM_ENVS)]
     memory_actions = [[] for _ in range(NUM_ENVS)]
     memory_players = [[] for _ in range(NUM_ENVS)]
+    memory_valid_masks = [[] for _ in range(NUM_ENVS)]
 
     active_games = set(range(NUM_ENVS))
     shifts = 1 << torch.arange(64)
@@ -162,6 +170,7 @@ for episode_batch in range(EPISODES // NUM_ENVS):
             # store single game state to memory (keeping it on GPU is fine here)
             memory_states[game_idx].append(state_tensor[batch_idx].unsqueeze(0))
             memory_players[game_idx].append(current_player)
+            memory_valid_masks[game_idx].append(valid_tensor[batch_idx].unsqueeze(0))
 
         # get network predictions for the whole batch
         logits = model(state_tensor)
@@ -196,6 +205,7 @@ for episode_batch in range(EPISODES // NUM_ENVS):
     all_states = []
     all_actions = []
     all_rewards = []
+    all_valid_masks = []
 
     for game_idx in range(NUM_ENVS):
         game = games[game_idx]
@@ -211,14 +221,19 @@ for episode_batch in range(EPISODES // NUM_ENVS):
 
         all_states.extend(memory_states[game_idx])
         all_actions.extend(memory_actions[game_idx])
+        all_valid_masks.extend(memory_valid_masks[game_idx])
 
     batch_states = torch.cat(all_states, dim=0) # tensors already on gpu
     batch_actions = torch.tensor(all_actions, dtype=torch.long, device=device)
     batch_rewards = torch.tensor(all_rewards, dtype=torch.float32, device=device)
+    batch_valid_masks = torch.cat(all_valid_masks, dim=0)
 
     # training (policy gradient)
     # feed batch of boards to network to get logits with gradients
     batch_logits = model(batch_states)
+    
+    # apply action mask to training logits so invalid actions don't explode the loss
+    batch_logits[~batch_valid_masks.bool()] = -float("inf")
 
     # convert logits to log-probabilities
     log_probs = torch.log_softmax(batch_logits, dim=1)
