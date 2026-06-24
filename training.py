@@ -3,9 +3,10 @@ import random
 import torch
 import reversi_env
 from agent import ReversiNet
+from mcts import MCTS
 
 EPISODES = 1000000
-NUM_ENVS = 100
+NUM_ENVS = 20
 LEARNING_RATE = 1e-3
 
 if __name__ == "__main__":
@@ -31,7 +32,7 @@ if __name__ == "__main__":
         games = [reversi_env.Game() for _ in range(NUM_ENVS)]
 
         memory_states = [[] for _ in range(NUM_ENVS)]
-        memory_actions = [[] for _ in range(NUM_ENVS)]
+        memory_mcts_probs = [[] for _ in range(NUM_ENVS)]
         memory_players = [[] for _ in range(NUM_ENVS)]
         memory_valid_masks = [[] for _ in range(NUM_ENVS)]
 
@@ -81,25 +82,27 @@ if __name__ == "__main__":
                 memory_players[game_idx].append(current_player)
                 memory_valid_masks[game_idx].append(valid_tensor[batch_idx].unsqueeze(0))
 
-            # get network predictions for the whole batch
-            with torch.no_grad():
-                logits, _ = model(state_tensor)
-
-            # apply action mask
-            logits[~valid_tensor.bool()] = -float("inf")
-
-            # sample actions from the probability distribution
-            probabilities = torch.softmax(logits, dim=1)
-            sampled_actions = torch.multinomial(probabilities, 1).squeeze(1)
+            # Use MCTS for action selection
+            mcts_engine = MCTS(model, num_simulations=25, device=device)
+            sampled_actions = []
+            
+            for batch_idx, game_idx in enumerate(active_list):
+                game = games[game_idx]
+                
+                # Get MCTS policy
+                # temperature=1.0 for exploration during early training
+                probs = mcts_engine.get_action_probs(game, temperature=1.0)
+                memory_mcts_probs[game_idx].append(probs)
+                
+                # Sample action based on MCTS probabilities
+                action = torch.multinomial(torch.tensor(probs), 1).item()
+                sampled_actions.append(action)
 
             # apply actions and update games
             for batch_idx, game_idx in enumerate(active_list):
                 game = games[game_idx]
                 
-                action = sampled_actions[batch_idx].item()
-                memory_actions[game_idx].append(action)
-
-                action = int(action)
+                action = int(sampled_actions[batch_idx])
                 row, col = action // 8, action % 8
                 game.apply_move_fast(row, col)
 
@@ -108,7 +111,7 @@ if __name__ == "__main__":
 
         # collect memory from all games
         all_states = []
-        all_actions = []
+        all_mcts_probs = []
         all_rewards = []
         all_valid_masks = []
 
@@ -125,11 +128,11 @@ if __name__ == "__main__":
                     all_rewards.append(-1.0)
 
             all_states.extend(memory_states[game_idx])
-            all_actions.extend(memory_actions[game_idx])
+            all_mcts_probs.extend(memory_mcts_probs[game_idx])
             all_valid_masks.extend(memory_valid_masks[game_idx])
 
         batch_states = torch.cat(all_states, dim=0) # tensors already on gpu
-        batch_actions = torch.tensor(all_actions, dtype=torch.long, device=device)
+        batch_mcts_probs = torch.tensor(all_mcts_probs, dtype=torch.float32, device=device)
         batch_rewards = torch.tensor(all_rewards, dtype=torch.float32, device=device)
         batch_valid_masks = torch.cat(all_valid_masks, dim=0)
 
@@ -146,17 +149,8 @@ if __name__ == "__main__":
         # convert logits to log-probabilities
         log_probs = torch.log_softmax(batch_logits, dim=1)
 
-        # extract the log-probabilities of actions played
-        action_log_probs = log_probs[range(len(batch_actions)), batch_actions]
-
-        # actual reward - predicted value
-        # detach batch_values so the policy gradient doesn't update the value network
-        advantages = batch_rewards - batch_values.detach()
-
-        # policy loss using advantages instead of raw rewards
-        policy_loss = -(action_log_probs * advantages).mean()
-
-        # mean squared error between predicted value and actual reward
+        # alpha zero policy + value loss
+        policy_loss = -(batch_mcts_probs * log_probs).sum(dim=1).mean()
         value_loss = torch.nn.functional.mse_loss(batch_values, batch_rewards)
 
         # total loss = sum of policy + value losses
