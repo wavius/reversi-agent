@@ -53,14 +53,14 @@ def benchmark(num_games=100):
             current_player = game.get_current_player()
             
             if current_player == agent_color:
-                # Agent move using MCTS lookahead!
+                # agent move with mcts
                 action_probs = mcts_engine.get_action_probs(game, temperature=0.0) # greedy best move
                 action = max(range(64), key=lambda i: action_probs[i])
                 
                 row, col = action // 8, action % 8
                 game.apply_move_fast(row, col)
             else:
-                # Greedy move
+                # greedy alg move
                 action = reversi_env.greedy_move(game.get_board(), current_player)
                 row, col = action // 8, action % 8
                 game.apply_move_fast(row, col)

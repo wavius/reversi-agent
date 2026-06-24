@@ -1,11 +1,10 @@
 import os
-import random
 import torch
 import reversi_env
 from agent import ReversiNet
 from mcts import MCTS
 
-EPISODES = 1000000
+EPISODES = 10000
 NUM_ENVS = 20
 LEARNING_RATE = 1e-3
 
