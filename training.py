@@ -41,6 +41,7 @@ if __name__ == "__main__":
         def to_signed(val):
             return val - (1 << 64) if val >= (1 << 63) else val
 
+        model.eval() # turn off batch norm tracking during gameplay
         while active_games:
             active_list = list(active_games)
             
@@ -81,7 +82,8 @@ if __name__ == "__main__":
                 memory_valid_masks[game_idx].append(valid_tensor[batch_idx].unsqueeze(0))
 
             # get network predictions for the whole batch
-            logits = model(state_tensor)
+            with torch.no_grad():
+                logits = model(state_tensor)
 
             # apply action mask
             logits[~valid_tensor.bool()] = -float("inf")
@@ -132,6 +134,8 @@ if __name__ == "__main__":
         batch_valid_masks = torch.cat(all_valid_masks, dim=0)
 
         # training (policy gradient)
+        model.train() # turn batch norm tracking back on for the update
+        
         # feed batch of boards to network to get logits with gradients
         batch_logits = model(batch_states)
         
