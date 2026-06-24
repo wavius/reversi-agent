@@ -3,6 +3,10 @@
 #include <cstdint>
 #include <cassert>
 
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
+
 namespace reversi {
 
 #define FILLED 1
@@ -151,8 +155,20 @@ public:
   }
 
   // Board state
-  std::size_t countBlackPieces() const { return __builtin_popcountll(black_pieces); }
-  std::size_t countWhitePieces() const { return __builtin_popcountll(white_pieces); }
+  std::size_t countBlackPieces() const { 
+#ifdef _MSC_VER
+    return __popcnt64(black_pieces);
+#else
+    return __builtin_popcountll(black_pieces);
+#endif
+  }
+  std::size_t countWhitePieces() const { 
+#ifdef _MSC_VER
+    return __popcnt64(white_pieces);
+#else
+    return __builtin_popcountll(white_pieces);
+#endif
+  }
   std::size_t countPieces() const { return countBlackPieces() + countWhitePieces(); }
 };
 
