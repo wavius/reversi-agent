@@ -1,5 +1,6 @@
 #include <pybind11/pybind11.h>
 #include "game/game.hpp"
+#include "game/alg.hpp"
 
 namespace py = pybind11;
 using namespace reversi;
@@ -12,6 +13,8 @@ PYBIND11_MODULE(reversi_env, m) {
         .value("BLACK", Color::BLACK)
         .value("WHITE", Color::WHITE)
         .export_values();
+
+    m.def("greedy_move", &Algorithms::greedyMove, "Get greedy move");
 
     py::class_<Board>(m, "Board")
         .def(py::init<>())

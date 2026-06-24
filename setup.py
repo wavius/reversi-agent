@@ -1,6 +1,8 @@
 from setuptools import setup
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 
+# compiles c++ as python module
+# for windows: python setup.py build_ext --inplace
 ext_modules = [
     Pybind11Extension(
         "reversi_env",
