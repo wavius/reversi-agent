@@ -111,6 +111,6 @@ def make_move(model, board, current_player, device):
     with torch.no_grad():
         logits = model(state_tensor)
         logits[~valid_tensor.bool()] = -float("inf")
-        action = torch.multinomial(torch.softmax(logits, dim=1), 1).item()
+        action = torch.argmax(logits, dim=1).item()
     
     return int(action)

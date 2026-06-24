@@ -23,10 +23,29 @@ def benchmark(num_games=100):
     print(f"Starting benchmark of {num_games} games")
 
     # agent plays half the games as black, half as white
+    import random
+
     for i in range(num_games):
         game = reversi_env.Game()
         agent_color = reversi_env.Color.BLACK if i % 2 == 0 else reversi_env.Color.WHITE
         
+        # randomize the first 4 moves to prevent deterministic games
+        for _ in range(4):
+            if not game.is_game_over():
+                current_player = game.get_current_player()
+                board = game.get_board()
+                valid_mask = board.get_valid_moves_mask(current_player)
+                
+                valid_moves = []
+                for move in range(64):
+                    if (valid_mask >> move) & 1:
+                        valid_moves.append(move)
+                        
+                if valid_moves:
+                    random_move = random.choice(valid_moves)
+                    row, col = random_move // 8, random_move % 8
+                    game.apply_move_fast(row, col)
+
         while not game.is_game_over():
             current_player = game.get_current_player()
             
