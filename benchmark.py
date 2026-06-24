@@ -46,14 +46,17 @@ def benchmark(num_games=100):
                     row, col = random_move // 8, random_move % 8
                     game.apply_move_fast(row, col)
 
+        from mcts import MCTS
+        mcts_engine = MCTS(model, num_simulations=100, device=device)
+
         while not game.is_game_over():
             current_player = game.get_current_player()
             
             if current_player == agent_color:
-                # Agent move
-                action = agent.make_move(model, game.get_board(), current_player, device)
+                # Agent move using MCTS lookahead!
+                action_probs = mcts_engine.get_action_probs(game, temperature=0.0) # greedy best move
+                action = max(range(64), key=lambda i: action_probs[i])
                 
-                action = int(action)
                 row, col = action // 8, action % 8
                 game.apply_move_fast(row, col)
             else:

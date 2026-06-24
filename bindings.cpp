@@ -18,6 +18,7 @@ PYBIND11_MODULE(reversi_env, m) {
 
     py::class_<Board>(m, "Board")
         .def(py::init<>())
+        .def("clone", [](const Board &b) { return Board(b); })
         .def("get_piece", &Board::getPiece)
         .def("get_black_pieces", &Board::getBlackPieces)
         .def("get_white_pieces", &Board::getWhitePieces)
@@ -33,6 +34,7 @@ PYBIND11_MODULE(reversi_env, m) {
 
     py::class_<Game>(m, "Game")
         .def(py::init<>())
+        .def("clone", [](const Game &g) { return Game(g); })
         .def("get_board", &Game::getBoard)
         .def("get_current_player", &Game::getCurrentPlayer)
         .def("is_game_over", &Game::isGameOver)
