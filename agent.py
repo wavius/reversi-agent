@@ -82,8 +82,7 @@ class ReversiNet(nn.Module):
 
 def make_move(model, board, current_player, device):
     """
-    Given a model, a C++ board, and the current player, 
-    returns the best action (0-63) according to the neural network.
+    returns the best action according to the residual neural network
     """
     def to_signed(val):
         return val - (1 << 64) if val >= (1 << 63) else val
@@ -112,6 +111,6 @@ def make_move(model, board, current_player, device):
     with torch.no_grad():
         logits = model(state_tensor)
         logits[~valid_tensor.bool()] = -float("inf")
-        action = torch.argmax(logits, dim=1).item()
+        action = torch.multinomial(torch.softmax(logits, dim=1), 1).item()
     
     return int(action)

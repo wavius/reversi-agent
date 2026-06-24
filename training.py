@@ -8,16 +8,6 @@ EPISODES = 1000000
 NUM_ENVS = 100
 LEARNING_RATE = 1e-3
 
-INITIAL_EPSILON = 0.20
-FINAL_EPSILON = 0.01
-DECAY_STEPS = 10000
-
-def epsilon_decay_schedule(initial_epsilon, final_epsilon, decay_steps, current_step):
-    # calculate progress (capped at 1.0)
-    progress = min(1.0, current_step / decay_steps)
-    # linearly interpolate between initial and final
-    return initial_epsilon - (progress * (initial_epsilon - final_epsilon))
-
 if __name__ == "__main__":
     # use nvidia gpu if available, else cpu
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -37,8 +27,6 @@ if __name__ == "__main__":
 
     for episode_batch in range(EPISODES // NUM_ENVS):
         current_episode = episode_batch * NUM_ENVS
-        # update epsilon for this batch of episodes
-        epsilon = epsilon_decay_schedule(INITIAL_EPSILON, FINAL_EPSILON, DECAY_STEPS, current_episode)
         
         games = [reversi_env.Game() for _ in range(NUM_ENVS)]
 
@@ -98,20 +86,15 @@ if __name__ == "__main__":
             # apply action mask
             logits[~valid_tensor.bool()] = -float("inf")
 
-            # epsilon-greedy exploration for the batch
-            is_random = torch.rand(len(active_list)) < epsilon
-            best_actions = torch.argmax(logits, dim=1)
+            # sample actions from the probability distribution
+            probabilities = torch.softmax(logits, dim=1)
+            sampled_actions = torch.multinomial(probabilities, 1).squeeze(1)
 
             # apply actions and update games
             for batch_idx, game_idx in enumerate(active_list):
                 game = games[game_idx]
                 
-                if is_random[batch_idx].item():
-                    valid_indices = valid_tensor[batch_idx].nonzero()[:, 0].tolist()
-                    action = random.choice(valid_indices)
-                else:
-                    action = best_actions[batch_idx].item()
-
+                action = sampled_actions[batch_idx].item()
                 memory_actions[game_idx].append(action)
 
                 action = int(action)
