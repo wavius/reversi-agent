@@ -5,49 +5,82 @@ import random
 
 BOARD_SIZE = 8
 
-EPISODES = 10000
-NUM_ENVS = 128
+EPISODES = 1000000
+NUM_ENVS = 100
 LEARNING_RATE = 1e-3
 
 INITIAL_EPSILON = 0.20
 FINAL_EPSILON = 0.01
-DECAY_STEPS = 2000
+DECAY_STEPS = 10000
+
+class ResBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        
+        # feature extractor: 2d convolutional neural network
+        # in/out_channels: depth of data
+        # kernel_size: size of sliding filter window
+        # padding: zeroed border around input grid
+        self.conv1 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
+        self.relu1 = nn.ReLU()
+        self.conv2 = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, padding=1)
+        self.relu2 = nn.ReLU()
+
+    # save for Residual connection
+    def forward(self, x):
+        identity = x
+
+        # pass through two conv layers
+        out = self.conv1(x)
+        out = self.relu1(out)
+        out = self.conv2(out)
+        
+        # add input to the output
+        out += identity
+        out = self.relu2(out)
+
+        return out
 
 
 class ReversiNet(nn.Module):
-    def __init__(self):
+    def __init__(self, channels=128):
         super().__init__()
 
-        # feature extractor: 2d convolutional neural network
-        self.conv = nn.Sequential(
-            # in/out_channels: depth of data
-            # kernel_size: size of sliding filter window
-            # padding: zeroed border around input grid
-            nn.Conv2d(in_channels=2, out_channels=64, kernel_size=3, padding=1),
+        self.initial_conv = nn.Sequential(
+            nn.Conv2d(in_channels=2, out_channels=channels, kernel_size=3, padding=1),
             # rectified linear unit: f(x) = max(0, x)
             nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            # flattens 3d grid into 1d list
-            nn.Flatten(),
         )
+        self.res_blocks = nn.Sequential(
+            ResBlock(channels),
+            ResBlock(channels),
+            ResBlock(channels),
+            ResBlock(channels),
+            ResBlock(channels),
+            ResBlock(channels),
+            ResBlock(channels),
+            ResBlock(channels),
+        )
+
+        self.policy_conv = nn.Conv2d(in_channels=channels, out_channels=2, kernel_size=1)
+        self.policy_flatten = nn.Flatten()
 
         # decision maker: linear neural layer
         # in_features: channels * rows * columns (64 * 8 * 8)
         # out_features: 64 squares (probabilities for next move)
         # todo: add a value_head to predict winning/losing
-        self.policy_head = nn.Linear(
-            in_features=64 * BOARD_SIZE * BOARD_SIZE, out_features=64
-        )
+        self.policy_head = nn.Linear(2 * BOARD_SIZE * BOARD_SIZE, 64)
 
-    def forward(self, in_tensor):
+    def forward(self, x):
         # extract features from the board tensor
-        features = self.conv(in_tensor)
+        x = self.initial_conv(x)
+        x = self.res_blocks(x)
 
-        # get un-normalized probabilities for 64 squares
-        logits = self.policy_head(features)
+        x = self.policy_conv(x)
+        x = self.policy_flatten(x)
+        x = self.policy_head(x)
 
-        return logits
+        return x
 
 
 def epsilon_decay_schedule(initial_epsilon, final_epsilon, decay_steps, current_step):
@@ -87,40 +120,46 @@ for episode_batch in range(EPISODES // NUM_ENVS):
     memory_players = [[] for _ in range(NUM_ENVS)]
 
     active_games = set(range(NUM_ENVS))
+    shifts = 1 << torch.arange(64)
+
+    def to_signed(val):
+        return val - (1 << 64) if val >= (1 << 63) else val
 
     while active_games:
         active_list = list(active_games)
         
-        # create batched tensors
-        state_tensor = torch.zeros((len(active_list), 2, 8, 8), device=device)
-        valid_tensor = torch.zeros((len(active_list), 64), device=device)
+        p0_list, p1_list, valid_list = [], [], []
 
-        # populate tensors for all active games
+        # extract integer bitboards for all active games
         for batch_idx, game_idx in enumerate(active_list):
             game = games[game_idx]
             board = game.get_board()
             current_player = game.get_current_player()
 
-            white_pieces = board.get_white_pieces()
-            black_pieces = board.get_black_pieces()
-            valid_mask = board.get_valid_moves_mask(current_player)
+            if current_player == reversi_env.Color.BLACK:
+                p0_list.append(board.get_black_pieces())
+                p1_list.append(board.get_white_pieces())
+            else:
+                p0_list.append(board.get_white_pieces())
+                p1_list.append(board.get_black_pieces())
 
-            for r in range(8):
-                for c in range(8):
-                    index = (r * 8) + c
-                    is_white = (white_pieces >> index) & 1
-                    is_black = (black_pieces >> index) & 1
-                    
-                    if current_player == reversi_env.Color.BLACK:
-                        state_tensor[batch_idx, 0, r, c] = is_black
-                        state_tensor[batch_idx, 1, r, c] = is_white
-                    else:
-                        state_tensor[batch_idx, 0, r, c] = is_white
-                        state_tensor[batch_idx, 1, r, c] = is_black
+            valid_list.append(board.get_valid_moves_mask(current_player))
 
-                    valid_tensor[batch_idx, index] = (valid_mask >> index) & 1
-            
-            # store single game state to memory
+        # vectorized extraction of bits into (B, 64) boolean masks, then reshape
+        p0_tensor = torch.tensor([to_signed(v) for v in p0_list], dtype=torch.int64).unsqueeze(1)
+        p1_tensor = torch.tensor([to_signed(v) for v in p1_list], dtype=torch.int64).unsqueeze(1)
+        v_tensor = torch.tensor([to_signed(v) for v in valid_list], dtype=torch.int64).unsqueeze(1)
+
+        state_tensor = torch.stack([
+            (p0_tensor & shifts) != 0,
+            (p1_tensor & shifts) != 0
+        ], dim=1).view(-1, 2, 8, 8).float().to(device)
+
+        valid_tensor = ((v_tensor & shifts) != 0).float().to(device)
+
+        for batch_idx, game_idx in enumerate(active_list):
+            current_player = games[game_idx].get_current_player()
+            # store single game state to memory (keeping it on GPU is fine here)
             memory_states[game_idx].append(state_tensor[batch_idx].unsqueeze(0))
             memory_players[game_idx].append(current_player)
 
@@ -146,6 +185,7 @@ for episode_batch in range(EPISODES // NUM_ENVS):
 
             memory_actions[game_idx].append(action)
 
+            action = int(action)
             row, col = action // 8, action % 8
             game.apply_move_fast(row, col)
 
