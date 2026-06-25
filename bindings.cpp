@@ -15,6 +15,7 @@ PYBIND11_MODULE(reversi_env, m) {
         .export_values();
 
     m.def("greedy_move", &Algorithms::greedyMove, "Get greedy move");
+    m.def("minimax_move", &Algorithms::minimaxMove, "Get minimax move");
 
     py::class_<Board>(m, "Board")
         .def(py::init<>())

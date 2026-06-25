@@ -69,8 +69,8 @@ def benchmark(num_games=100):
                     p1_list.append(board.get_black_pieces())
                 valid_list.append(board.get_valid_moves_mask(current_player))
             else:
-                # Greedy move
-                action = reversi_env.greedy_move(game.get_board(), current_player)
+                # Minimax move
+                action = reversi_env.minimax_move(game.get_board(), current_player)
                 row, col = action // 8, action % 8
                 game.apply_move_fast(row, col)
 
