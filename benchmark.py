@@ -5,7 +5,9 @@ import agent
 from agent import ReversiNet
 from mcts import BatchedMCTS
 
-MCTS_SIMULATIONS = 25
+MCTS_SIMULATIONS = 50
+
+ITERATIONS = 1000
 
 # test agent against greedy alg
 def benchmark(num_games=100):
@@ -69,17 +71,17 @@ def benchmark(num_games=100):
                     p1_list.append(board.get_black_pieces())
                 valid_list.append(board.get_valid_moves_mask(current_player))
             else:
-                # Minimax move
+                # minimax move
                 action = reversi_env.minimax_move(game.get_board(), current_player)
                 row, col = action // 8, action % 8
                 game.apply_move_fast(row, col)
 
-        # Batch evaluate all agent moves using BatchedMCTS
+        # batch evaluate all agent moves using BatchedMCTS
         if agent_game_indices:
             mcts_engine = BatchedMCTS(model, num_simulations=MCTS_SIMULATIONS, device=device)
             active_game_objs = [games[i] for i in agent_game_indices]
             
-            # get MCTS policy (temperature=0 for greedy best play)
+            # get mcts policy (temperature=0 for greedy best play)
             batch_probs = mcts_engine.get_action_probs_batch(active_game_objs, temperature=0.0)
 
             for i, game_idx in enumerate(agent_game_indices):
@@ -115,4 +117,4 @@ def benchmark(num_games=100):
     print(f"Agent Winrate: {winrate:.2f}%")
 
 if __name__ == "__main__":
-    benchmark(100)
+    benchmark(ITERATIONS)

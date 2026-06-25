@@ -4,10 +4,10 @@ import reversi_env
 from agent import ReversiNet
 from mcts import MCTS, BatchedMCTS
 
-EPISODES = 10000
-NUM_ENVS = 20
+EPISODES = 1000 * 1
+NUM_ENVS = 50
 LEARNING_RATE = 1e-4 
-MCTS_SIMULATIONS = 25
+MCTS_SIMULATIONS = 50
 
 if __name__ == "__main__":
     # use nvidia gpu if available, else cpu
