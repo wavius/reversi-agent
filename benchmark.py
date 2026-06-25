@@ -5,9 +5,9 @@ import agent
 from agent import ReversiNet
 from mcts import BatchedMCTS
 
-MCTS_SIMULATIONS = 50
+MCTS_SIMULATIONS = 800
 
-ITERATIONS = 1000
+ITERATIONS = 20
 
 # test agent against greedy alg
 def benchmark(num_games=100):

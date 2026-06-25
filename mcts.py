@@ -39,12 +39,23 @@ class MCTSNode:
             next_game.apply_move_fast(row, col)
             self.children[action] = MCTSNode(next_game, parent=self, action=action, prior_prob=prob)
             
-    def backup(self, value):
+    def backup(self, value, player):
         self.N += 1
-        self.W += value
-        self.Q = self.W / self.N
         if self.parent is not None:
-            self.parent.backup(-value)
+            parent_player = self.parent.game.get_current_player()
+            if parent_player == player:
+                self.W += value
+            else:
+                self.W += -value
+            self.Q = self.W / self.N
+            self.parent.backup(value, player)
+        else:
+            root_player = self.game.get_current_player()
+            if root_player == player:
+                self.W += value
+            else:
+                self.W += -value
+            self.Q = self.W / self.N
             
     def best_child(self, c_puct=1.0):
         best_score = -float('inf')
@@ -110,11 +121,10 @@ class MCTS:
                 
                 # backup
                 # value is from node.game's current player
-                # pass -value because parent's turn is opponent
-                node.backup(-value)
+                node.backup(value, node.game.get_current_player())
             else:
                 # node is terminal
-                node.backup(-node.reward)
+                node.backup(node.reward, node.game.get_current_player())
                 
         # calculate final action probabilities based on visit counts
         action_probs = [0.0] * 64
@@ -226,7 +236,7 @@ class BatchedMCTS:
             eval_idx = 0
             for i, node in enumerate(nodes):
                 if node.is_terminal:
-                    node.backup(-node.reward)
+                    node.backup(node.reward, node.game.get_current_player())
                 else:
                     policy = probs[eval_idx]
                     value = values[eval_idx].item()
@@ -251,7 +261,7 @@ class BatchedMCTS:
                             action_probs[a] = 1.0 / len(action_probs)
                             
                     node.expand(action_probs)
-                    node.backup(-value)
+                    node.backup(value, current_player)
                     
         # calculate final action probabilities based on visit counts for all games
         batch_action_probs = []
