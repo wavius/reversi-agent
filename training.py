@@ -7,6 +7,7 @@ from mcts import MCTS
 EPISODES = 10000
 NUM_ENVS = 20
 LEARNING_RATE = 1e-3
+MCTS_SIMULATIONS = 25
 
 if __name__ == "__main__":
     # use nvidia gpu if available, else cpu
@@ -81,19 +82,19 @@ if __name__ == "__main__":
                 memory_players[game_idx].append(current_player)
                 memory_valid_masks[game_idx].append(valid_tensor[batch_idx].unsqueeze(0))
 
-            # Use MCTS for action selection
-            mcts_engine = MCTS(model, num_simulations=25, device=device)
+            # use mcts for action selection
+            mcts_engine = MCTS(model, num_simulations=MCTS_SIMULATIONS, device=device)
             sampled_actions = []
             
             for batch_idx, game_idx in enumerate(active_list):
                 game = games[game_idx]
                 
-                # Get MCTS policy
+                # get mcts policy
                 # temperature=1.0 for exploration during early training
                 probs = mcts_engine.get_action_probs(game, temperature=1.0)
                 memory_mcts_probs[game_idx].append(probs)
                 
-                # Sample action based on MCTS probabilities
+                # sample action based on mcts probabilities
                 action = torch.multinomial(torch.tensor(probs), 1).item()
                 sampled_actions.append(action)
 

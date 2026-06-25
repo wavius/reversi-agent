@@ -51,7 +51,7 @@ class MCTSNode:
         best_node = None
         
         for action, child in self.children.items():
-            # PUCT formula: Q + c * P * sqrt(N_parent) / (1 + N_child)
+            # puct formula: q + c * p * sqrt(n_parent) / (1 + n_child)
             u = c_puct * child.P * math.sqrt(self.N) / (1 + child.N)
             score = child.Q + u
             
@@ -77,11 +77,11 @@ class MCTS:
         for _ in range(self.num_simulations):
             node = root
             
-            # 1. Selection
+            # 1. selection
             while node.is_expanded and not node.is_terminal:
                 node = node.best_child(self.c_puct)
                 
-            # 2. Expansion & Evaluation
+            # 2. expansion & evaluation
             if not node.is_terminal:
                 policy, value = self.evaluate(node.game)
                 
@@ -108,20 +108,20 @@ class MCTS:
                         
                 node.expand(action_probs)
                 
-                # 3. Backup
-                # value is from perspective of node.game's current player
-                # we pass -value because the parent's turn is the opponent
+                # 3. backup
+                # value is from node.game's current player
+                # pass -value because parent's turn is opponent
                 node.backup(-value)
             else:
                 # node is terminal
                 node.backup(-node.reward)
                 
-        # Calculate final action probabilities based on visit counts
+        # calculate final action probabilities based on visit counts
         action_probs = [0.0] * 64
         valid_actions = list(root.children.keys())
         
         if temperature == 0:
-            # Greedy play (e.g. during actual testing/benchmarking)
+            # greedy play (e.g. during actual testing/benchmarking)
             best_action = max(root.children.items(), key=lambda x: x[1].N)[0]
             action_probs[best_action] = 1.0
             return action_probs

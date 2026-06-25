@@ -3,6 +3,8 @@ import reversi_env
 import agent
 from agent import ReversiNet
 
+MCTS_SIMULATIONS = 100
+
 # test agent against greedy alg
 def benchmark(num_games=100):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
