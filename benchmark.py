@@ -3,6 +3,9 @@ import random
 import reversi_env
 import agent
 from agent import ReversiNet
+from mcts import BatchedMCTS
+
+MCTS_SIMULATIONS = 25
 
 # test agent against greedy alg
 def benchmark(num_games=100):
@@ -71,26 +74,17 @@ def benchmark(num_games=100):
                 row, col = action // 8, action % 8
                 game.apply_move_fast(row, col)
 
-        # Batch evaluate all agent moves
+        # Batch evaluate all agent moves using BatchedMCTS
         if agent_game_indices:
-            p0_tensor = torch.tensor([to_signed(v) for v in p0_list], dtype=torch.int64).unsqueeze(1)
-            p1_tensor = torch.tensor([to_signed(v) for v in p1_list], dtype=torch.int64).unsqueeze(1)
-            v_tensor = torch.tensor([to_signed(v) for v in valid_list], dtype=torch.int64).unsqueeze(1)
-
-            state_tensor = torch.stack([
-                (p0_tensor & shifts) != 0,
-                (p1_tensor & shifts) != 0
-            ], dim=1).view(-1, 2, 8, 8).float().to(device)
+            mcts_engine = BatchedMCTS(model, num_simulations=MCTS_SIMULATIONS, device=device)
+            active_game_objs = [games[i] for i in agent_game_indices]
             
-            valid_tensor = ((v_tensor & shifts) != 0).float().to(device)
-
-            with torch.no_grad():
-                logits, _ = model(state_tensor)
-                logits[~valid_tensor.bool()] = -float("inf")
-                best_actions = torch.argmax(logits, dim=1)
+            # get MCTS policy (temperature=0 for greedy best play)
+            batch_probs = mcts_engine.get_action_probs_batch(active_game_objs, temperature=0.0)
 
             for i, game_idx in enumerate(agent_game_indices):
-                action = best_actions[i].item()
+                probs = batch_probs[i]
+                action = probs.index(max(probs)) # pick the move with the highest probability
                 row, col = action // 8, action % 8
                 games[game_idx].apply_move_fast(row, col)
 
