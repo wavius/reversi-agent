@@ -110,6 +110,7 @@ class MCTS:
                         sum_probs += prob
                         
                 # normalize
+                # policy pruning to drop moves with < 2% probability
                 if sum_probs > 0:
                     for a in action_probs:
                         action_probs[a] /= sum_probs
@@ -185,6 +186,9 @@ class BatchedMCTS:
     def get_action_probs_batch(self, games, temperature=1.0):
         roots = [MCTSNode(game) for game in games]
         
+        if not hasattr(self, 'cache'):
+            self.cache = {}
+            
         for _ in range(self.num_simulations):
             nodes = [root for root in roots]
             
@@ -194,7 +198,7 @@ class BatchedMCTS:
                     nodes[i] = nodes[i].best_child(self.c_puct)
                     
             # expansion and evaluation
-            evaluate_indices = []
+            evaluate_data = []
             state_tensors = []
             
             def to_signed(val):
@@ -202,8 +206,9 @@ class BatchedMCTS:
             shifts = 1 << torch.arange(64)
             
             for i, node in enumerate(nodes):
-                if not node.is_terminal:
-                    evaluate_indices.append(i)
+                if node.is_terminal:
+                    node.backup(node.reward, node.game.get_current_player())
+                else:
                     board = node.game.get_board()
                     current_player = node.game.get_current_player()
                     if current_player == reversi_env.Color.BLACK:
@@ -213,17 +218,39 @@ class BatchedMCTS:
                         p0 = to_signed(board.get_white_pieces())
                         p1 = to_signed(board.get_black_pieces())
                     
-                    p0_tensor = torch.tensor([p0], dtype=torch.int64).unsqueeze(1)
-                    p1_tensor = torch.tensor([p1], dtype=torch.int64).unsqueeze(1)
-                    state = torch.stack([
-                        (p0_tensor & shifts) != 0,
-                        (p1_tensor & shifts) != 0
-                    ], dim=1).view(-1, 2, 8, 8).float()
-                    state_tensors.append(state)
+                    state_key = (p0, p1)
+                    valid_mask = board.get_valid_moves_mask(current_player)
+                    
+                    if state_key in self.cache:
+                        policy, value = self.cache[state_key]
+                        
+                        action_probs = {}
+                        sum_probs = 0.0
+                        for a in range(64):
+                            if (valid_mask & (1 << a)) != 0:
+                                prob = policy[a].item()
+                                action_probs[a] = prob
+                                sum_probs += prob
+                        
+                        if sum_probs > 0:
+                            for a in action_probs:
+                                action_probs[a] /= sum_probs
+                        else:
+                            for a in action_probs:
+                                action_probs[a] = 1.0 / len(action_probs)
+                                
+                        node.expand(action_probs)
+                        node.backup(value, current_player)
+                    else:
+                        p0_tensor = torch.tensor([p0], dtype=torch.int64).unsqueeze(1)
+                        p1_tensor = torch.tensor([p1], dtype=torch.int64).unsqueeze(1)
+                        state = torch.stack([
+                            (p0_tensor & shifts) != 0,
+                            (p1_tensor & shifts) != 0
+                        ], dim=1).view(-1, 2, 8, 8).float()
+                        state_tensors.append(state)
+                        evaluate_data.append((node, current_player, valid_mask, state_key))
             
-            # evaluate all non-terminal nodes in 1 GPU batch
-            probs = None
-            values = None
             if state_tensors:
                 batch_states = torch.cat(state_tensors, dim=0).to(self.device)
                 self.model.eval()
@@ -231,19 +258,12 @@ class BatchedMCTS:
                     logits, values = self.model(batch_states)
                     probs = torch.softmax(logits, dim=1).cpu()
                     values = values.cpu().squeeze(1)
-            
-            # expand and backup
-            eval_idx = 0
-            for i, node in enumerate(nodes):
-                if node.is_terminal:
-                    node.backup(node.reward, node.game.get_current_player())
-                else:
+                
+                for eval_idx, (node, current_player, valid_mask, state_key) in enumerate(evaluate_data):
                     policy = probs[eval_idx]
                     value = values[eval_idx].item()
-                    eval_idx += 1
                     
-                    current_player = node.game.get_current_player()
-                    valid_mask = node.game.get_board().get_valid_moves_mask(current_player)
+                    self.cache[state_key] = (policy, value)
                     
                     action_probs = {}
                     sum_probs = 0.0
