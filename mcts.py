@@ -301,3 +301,41 @@ class BatchedMCTS:
             batch_action_probs.append(action_probs)
             
         return batch_action_probs
+
+class CppBatchedMCTS:
+    def __init__(self, model, num_simulations=25, c_puct=1.0, device='cpu'):
+        self.model = model
+        self.num_simulations = num_simulations
+        self.c_puct = c_puct
+        self.device = device
+        self.engine = reversi_env.BatchedMCTSEngine(c_puct)
+        
+    def get_action_probs_batch(self, games, temperature=1.0):
+        self.engine.initialize(games)
+        
+        shifts = 1 << torch.arange(64, dtype=torch.int64)
+        
+        for _ in range(self.num_simulations):
+            p0_list, p1_list, valid_masks, players = self.engine.prepare_evaluation()
+            
+            if len(p0_list) > 0:
+                p0_tensor = torch.tensor(p0_list, dtype=torch.int64).unsqueeze(1)
+                p1_tensor = torch.tensor(p1_list, dtype=torch.int64).unsqueeze(1)
+                
+                state_tensors = torch.stack([
+                    (p0_tensor & shifts) != 0,
+                    (p1_tensor & shifts) != 0
+                ], dim=1).view(-1, 2, 8, 8).float()
+                
+                batch_states = state_tensors.to(self.device)
+                self.model.eval()
+                with torch.no_grad():
+                    logits, values = self.model(batch_states)
+                    probs = torch.softmax(logits, dim=1).cpu().tolist()
+                    values = values.cpu().squeeze(1).tolist()
+                    
+                self.engine.process_evaluation(probs, values)
+            else:
+                self.engine.process_evaluation([], [])
+                
+        return self.engine.get_action_probs(temperature)

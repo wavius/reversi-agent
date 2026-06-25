@@ -1,6 +1,8 @@
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include "game/game.hpp"
 #include "game/alg.hpp"
+#include "game/mcts.hpp"
 
 namespace py = pybind11;
 using namespace reversi;
@@ -42,4 +44,15 @@ PYBIND11_MODULE(reversi_env, m) {
         .def("get_winner", &Game::getWinner)
         .def("make_move", &Game::makeMove)
         .def("apply_move_fast", &Game::applyMoveFast);
+
+    py::class_<BatchedMCTSEngine>(m, "BatchedMCTSEngine")
+        .def(py::init<float>())
+        .def("initialize", &BatchedMCTSEngine::initialize)
+        .def("clear_cache", &BatchedMCTSEngine::clear_cache)
+        .def("prepare_evaluation", [](BatchedMCTSEngine& self) {
+            auto req = self.prepare_evaluation();
+            return py::make_tuple(req.p0, req.p1, req.valid_masks, req.players);
+        })
+        .def("process_evaluation", &BatchedMCTSEngine::process_evaluation)
+        .def("get_action_probs", &BatchedMCTSEngine::get_action_probs);
 }

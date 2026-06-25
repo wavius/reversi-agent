@@ -3,7 +3,7 @@ import random
 import reversi_env
 import agent
 from agent import ReversiNet
-from mcts import BatchedMCTS
+from mcts import CppBatchedMCTS as BatchedMCTS
 
 MCTS_SIMULATIONS = 1000
 
