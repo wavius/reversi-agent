@@ -6,7 +6,7 @@ from mcts import MCTS
 
 EPISODES = 10000
 NUM_ENVS = 20
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-4 
 MCTS_SIMULATIONS = 25
 
 if __name__ == "__main__":
@@ -144,7 +144,8 @@ if __name__ == "__main__":
         batch_values = batch_values.squeeze(-1) # make it 1D to match batch_rewards shape
         
         # apply action mask to training logits so invalid actions don't explode the loss
-        batch_logits[~batch_valid_masks.bool()] = -float("inf")
+        # using -1e9 instead of -inf is numerically safer for pytorch log_softmax
+        batch_logits[~batch_valid_masks.bool()] = -1e9
 
         # convert logits to log-probabilities
         log_probs = torch.log_softmax(batch_logits, dim=1)
@@ -159,6 +160,10 @@ if __name__ == "__main__":
         # backpropagation 
         optimizer.zero_grad()  # clear old math
         loss.backward()        # calculate weight adjustments
+        
+        # clip gradients to prevent them from exploding to NaN
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()       # apply adjustments
 
         print(f"Games {current_episode + 1} to {current_episode + NUM_ENVS}: Policy Loss: {policy_loss.item():.4f}, Value Loss: {value_loss.item():.4f}")
