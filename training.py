@@ -2,7 +2,7 @@ import os
 import torch
 import reversi_env
 from agent import ReversiNet
-from mcts import MCTS
+from mcts import MCTS, BatchedMCTS
 
 EPISODES = 10000
 NUM_ENVS = 20
@@ -82,16 +82,16 @@ if __name__ == "__main__":
                 memory_players[game_idx].append(current_player)
                 memory_valid_masks[game_idx].append(valid_tensor[batch_idx].unsqueeze(0))
 
-            # use mcts for action selection
-            mcts_engine = MCTS(model, num_simulations=MCTS_SIMULATIONS, device=device)
-            sampled_actions = []
+            # use batched mcts for action selection
+            mcts_engine = BatchedMCTS(model, num_simulations=MCTS_SIMULATIONS, device=device)
+            active_game_objs = [games[i] for i in active_list]
             
+            # get mcts policy for all active games simultaneously!
+            batch_probs = mcts_engine.get_action_probs_batch(active_game_objs, temperature=1.0)
+            
+            sampled_actions = []
             for batch_idx, game_idx in enumerate(active_list):
-                game = games[game_idx]
-                
-                # get mcts policy
-                # temperature=1.0 for exploration during early training
-                probs = mcts_engine.get_action_probs(game, temperature=1.0)
+                probs = batch_probs[batch_idx]
                 memory_mcts_probs[game_idx].append(probs)
                 
                 # sample action based on mcts probabilities

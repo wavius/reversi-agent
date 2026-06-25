@@ -77,11 +77,11 @@ class MCTS:
         for _ in range(self.num_simulations):
             node = root
             
-            # 1. selection
+            # selection
             while node.is_expanded and not node.is_terminal:
                 node = node.best_child(self.c_puct)
                 
-            # 2. expansion & evaluation
+            # expansion and evaluation
             if not node.is_terminal:
                 policy, value = self.evaluate(node.game)
                 
@@ -108,7 +108,7 @@ class MCTS:
                         
                 node.expand(action_probs)
                 
-                # 3. backup
+                # backup
                 # value is from node.game's current player
                 # pass -value because parent's turn is opponent
                 node.backup(-value)
@@ -121,7 +121,7 @@ class MCTS:
         valid_actions = list(root.children.keys())
         
         if temperature == 0:
-            # greedy play (e.g. during actual testing/benchmarking)
+            # greedy play
             best_action = max(root.children.items(), key=lambda x: x[1].N)[0]
             action_probs[best_action] = 1.0
             return action_probs
@@ -164,3 +164,110 @@ class MCTS:
             probs = torch.softmax(logits, dim=1)
             
         return probs.squeeze(0).cpu(), value.item()
+
+class BatchedMCTS:
+    def __init__(self, model, num_simulations=25, c_puct=1.0, device='cpu'):
+        self.model = model
+        self.num_simulations = num_simulations
+        self.c_puct = c_puct
+        self.device = device
+        
+    def get_action_probs_batch(self, games, temperature=1.0):
+        roots = [MCTSNode(game) for game in games]
+        
+        for _ in range(self.num_simulations):
+            nodes = [root for root in roots]
+            
+            # selection
+            for i in range(len(nodes)):
+                while nodes[i].is_expanded and not nodes[i].is_terminal:
+                    nodes[i] = nodes[i].best_child(self.c_puct)
+                    
+            # expansion and evaluation
+            evaluate_indices = []
+            state_tensors = []
+            
+            def to_signed(val):
+                return val - (1 << 64) if val >= (1 << 63) else val
+            shifts = 1 << torch.arange(64)
+            
+            for i, node in enumerate(nodes):
+                if not node.is_terminal:
+                    evaluate_indices.append(i)
+                    board = node.game.get_board()
+                    current_player = node.game.get_current_player()
+                    if current_player == reversi_env.Color.BLACK:
+                        p0 = to_signed(board.get_black_pieces())
+                        p1 = to_signed(board.get_white_pieces())
+                    else:
+                        p0 = to_signed(board.get_white_pieces())
+                        p1 = to_signed(board.get_black_pieces())
+                    
+                    p0_tensor = torch.tensor([p0], dtype=torch.int64).unsqueeze(1)
+                    p1_tensor = torch.tensor([p1], dtype=torch.int64).unsqueeze(1)
+                    state = torch.stack([
+                        (p0_tensor & shifts) != 0,
+                        (p1_tensor & shifts) != 0
+                    ], dim=1).view(-1, 2, 8, 8).float()
+                    state_tensors.append(state)
+            
+            # evaluate all non-terminal nodes in 1 GPU batch
+            probs = None
+            values = None
+            if state_tensors:
+                batch_states = torch.cat(state_tensors, dim=0).to(self.device)
+                self.model.eval()
+                with torch.no_grad():
+                    logits, values = self.model(batch_states)
+                    probs = torch.softmax(logits, dim=1).cpu()
+                    values = values.cpu().squeeze(1)
+            
+            # expand and backup
+            eval_idx = 0
+            for i, node in enumerate(nodes):
+                if node.is_terminal:
+                    node.backup(-node.reward)
+                else:
+                    policy = probs[eval_idx]
+                    value = values[eval_idx].item()
+                    eval_idx += 1
+                    
+                    current_player = node.game.get_current_player()
+                    valid_mask = node.game.get_board().get_valid_moves_mask(current_player)
+                    
+                    action_probs = {}
+                    sum_probs = 0.0
+                    for a in range(64):
+                        if (valid_mask & (1 << a)) != 0:
+                            prob = policy[a].item()
+                            action_probs[a] = prob
+                            sum_probs += prob
+                    
+                    if sum_probs > 0:
+                        for a in action_probs:
+                            action_probs[a] /= sum_probs
+                    else:
+                        for a in action_probs:
+                            action_probs[a] = 1.0 / len(action_probs)
+                            
+                    node.expand(action_probs)
+                    node.backup(-value)
+                    
+        # calculate final action probabilities based on visit counts for all games
+        batch_action_probs = []
+        for root in roots:
+            action_probs = [0.0] * 64
+            valid_actions = list(root.children.keys())
+            
+            if temperature == 0:
+                best_action = max(root.children.items(), key=lambda x: x[1].N)[0]
+                action_probs[best_action] = 1.0
+            else:
+                visits = [root.children[a].N ** (1.0 / temperature) for a in valid_actions]
+                sum_visits = sum(visits)
+                for a, v in zip(valid_actions, visits):
+                    action_probs[a] = v / sum_visits
+                    
+            batch_action_probs.append(action_probs)
+            
+        return batch_action_probs
