@@ -1,9 +1,8 @@
 import torch
+import random
 import reversi_env
 import agent
 from agent import ReversiNet
-
-MCTS_SIMULATIONS = 100
 
 # test agent against greedy alg
 def benchmark(num_games=100):
@@ -18,20 +17,14 @@ def benchmark(num_games=100):
         
     model.eval()
 
-    agent_wins = 0
-    greedy_wins = 0
-    draws = 0
+    print(f"Starting batched benchmark of {num_games} games")
 
-    print(f"Starting benchmark of {num_games} games")
+    games = [reversi_env.Game() for _ in range(num_games)]
+    agent_colors = [reversi_env.Color.BLACK if i % 2 == 0 else reversi_env.Color.WHITE for i in range(num_games)]
+    active_games = set(range(num_games))
 
-    # agent plays half the games as black, half as white
-    import random
-
-    for i in range(num_games):
-        game = reversi_env.Game()
-        agent_color = reversi_env.Color.BLACK if i % 2 == 0 else reversi_env.Color.WHITE
-        
-        # randomize the first 4 moves to prevent deterministic games
+    # randomize the first 4 moves to prevent deterministic games
+    for game in games:
         for _ in range(4):
             if not game.is_game_over():
                 current_player = game.get_current_player()
@@ -48,26 +41,71 @@ def benchmark(num_games=100):
                     row, col = random_move // 8, random_move % 8
                     game.apply_move_fast(row, col)
 
-        from mcts import MCTS
-        mcts_engine = MCTS(model, num_simulations=100, device=device)
+    shifts = 1 << torch.arange(64)
+    def to_signed(val):
+        return val - (1 << 64) if val >= (1 << 63) else val
 
-        while not game.is_game_over():
+    while active_games:
+        active_list = list(active_games)
+        
+        agent_game_indices = []
+        p0_list, p1_list, valid_list = [], [], []
+
+        for game_idx in active_list:
+            game = games[game_idx]
             current_player = game.get_current_player()
             
-            if current_player == agent_color:
-                # agent move with mcts
-                action_probs = mcts_engine.get_action_probs(game, temperature=0.0) # greedy best move
-                action = max(range(64), key=lambda i: action_probs[i])
-                
-                row, col = action // 8, action % 8
-                game.apply_move_fast(row, col)
+            if current_player == agent_colors[game_idx]:
+                agent_game_indices.append(game_idx)
+                board = game.get_board()
+                if current_player == reversi_env.Color.BLACK:
+                    p0_list.append(board.get_black_pieces())
+                    p1_list.append(board.get_white_pieces())
+                else:
+                    p0_list.append(board.get_white_pieces())
+                    p1_list.append(board.get_black_pieces())
+                valid_list.append(board.get_valid_moves_mask(current_player))
             else:
-                # greedy alg move
+                # Greedy move
                 action = reversi_env.greedy_move(game.get_board(), current_player)
                 row, col = action // 8, action % 8
                 game.apply_move_fast(row, col)
 
+        # Batch evaluate all agent moves
+        if agent_game_indices:
+            p0_tensor = torch.tensor([to_signed(v) for v in p0_list], dtype=torch.int64).unsqueeze(1)
+            p1_tensor = torch.tensor([to_signed(v) for v in p1_list], dtype=torch.int64).unsqueeze(1)
+            v_tensor = torch.tensor([to_signed(v) for v in valid_list], dtype=torch.int64).unsqueeze(1)
+
+            state_tensor = torch.stack([
+                (p0_tensor & shifts) != 0,
+                (p1_tensor & shifts) != 0
+            ], dim=1).view(-1, 2, 8, 8).float().to(device)
+            
+            valid_tensor = ((v_tensor & shifts) != 0).float().to(device)
+
+            with torch.no_grad():
+                logits, _ = model(state_tensor)
+                logits[~valid_tensor.bool()] = -float("inf")
+                best_actions = torch.argmax(logits, dim=1)
+
+            for i, game_idx in enumerate(agent_game_indices):
+                action = best_actions[i].item()
+                row, col = action // 8, action % 8
+                games[game_idx].apply_move_fast(row, col)
+
+        for game_idx in active_list:
+            if games[game_idx].is_game_over():
+                active_games.remove(game_idx)
+
+    agent_wins = 0
+    greedy_wins = 0
+    draws = 0
+
+    for i, game in enumerate(games):
         winner = game.get_winner()
+        agent_color = agent_colors[i]
+        
         if winner == agent_color:
             agent_wins += 1
         elif winner == reversi_env.Color.NONE:
