@@ -8,6 +8,7 @@ from mcts import CppBatchedMCTS as BatchedMCTS
 MCTS_SIMULATIONS = 1000
 
 ITERATIONS = 100
+ITERATIONS = 100
 
 # test agent against greedy alg
 def benchmark(num_games=100):
@@ -72,7 +73,11 @@ def benchmark(num_games=100):
                 valid_list.append(board.get_valid_moves_mask(current_player))
             else:
                 # minimax move
-                action = reversi_env.minimax_move(game.get_board(), current_player)
+                # action = reversi_env.minimax_move(game.get_board(), current_player)
+
+                # greedy move
+                action = reversi_env.greedy_move(game.get_board(), current_player)
+
                 row, col = action // 8, action % 8
                 game.apply_move_fast(row, col)
 
