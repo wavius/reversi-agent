@@ -8,7 +8,6 @@ from mcts import CppBatchedMCTS as BatchedMCTS
 MCTS_SIMULATIONS = 1000
 
 ITERATIONS = 100
-ITERATIONS = 100
 
 # test agent against greedy alg
 def benchmark(num_games=100):
