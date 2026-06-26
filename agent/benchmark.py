@@ -2,10 +2,11 @@ import torch
 import random
 import reversi_env
 import agent
+import os
 from agent import ReversiNet
 from mcts import CppBatchedMCTS as BatchedMCTS
 
-MCTS_SIMULATIONS = 1000
+MCTS_SIMULATIONS = 500
 
 ITERATIONS = 100
 
@@ -73,10 +74,10 @@ def benchmark(num_games=100):
                 valid_list.append(board.get_valid_moves_mask(current_player))
             else:
                 # minimax move
-                # action = reversi_env.minimax_move(game.get_board(), current_player)
+                action = reversi_env.minimax_move(game.get_board(), current_player)
 
                 # greedy move
-                action = reversi_env.greedy_move(game.get_board(), current_player)
+                # action = reversi_env.greedy_move(game.get_board(), current_player)
 
                 row, col = action // 8, action % 8
                 game.apply_move_fast(row, col)
