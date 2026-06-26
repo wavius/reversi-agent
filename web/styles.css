@@ -38,30 +38,37 @@ body {
     justify-content: center;
     align-items: center;
     gap: 1rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
 .control-group {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    width: 100%;
+    max-width: 220px;
 }
 
 label {
+    flex: 0 0 75px;
+    text-align: right;
     font-size: 0.9rem;
     color: #94a3b8;
 }
 
 select, input[type="number"] {
+    flex: 1;
     background: var(--board-bg);
     color: var(--text);
     border: 1px solid var(--board-border);
-    padding: 0.5rem 1rem;
+    padding: 0.5rem;
     border-radius: 6px;
     font-family: 'Outfit';
     font-size: 0.9rem;
     outline: none;
     cursor: pointer;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 button {
@@ -92,7 +99,7 @@ button:hover { opacity: 0.85; }
     padding: 6px;
     border-radius: 8px;
     width: 100%;
-    max-width: 420px;
+    max-width: min(420px, 55vh);
     aspect-ratio: 1 / 1;
     margin: 0 auto;
     box-sizing: border-box;
