@@ -7,7 +7,7 @@ ext_modules = [
     Pybind11Extension(
         "reversi_env",
         ["bindings.cpp"],
-        include_dirs=["."],
+        include_dirs=[".."],
         cxx_std=17,
     ),
 ]

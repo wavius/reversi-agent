@@ -1,6 +1,6 @@
 BUILD_DIR = build
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O3 -I.
+CXXFLAGS = -std=c++17 -Wall -Wextra -O3 -I..
 TARGET = $(BUILD_DIR)/reversi
 
 SRCS = main.cpp
@@ -24,7 +24,7 @@ $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
 
 python: bindings.cpp
-	$(CXX) -O3 -Wall -shared -std=c++17 -fPIC $(PYBIND_INCLUDES) -I. bindings.cpp -o $(PY_TARGET)
+	$(CXX) -O3 -Wall -shared -std=c++17 -fPIC $(PYBIND_INCLUDES) -I.. bindings.cpp -o $(PY_TARGET)
 
 clean:
 	rm -rf $(BUILD_DIR) $(PY_TARGET)
