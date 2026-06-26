@@ -45,6 +45,8 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    width: 100%;
+    max-width: 220px;
 }
 
 label {
@@ -54,7 +56,8 @@ label {
     color: #94a3b8;
 }
 
-select, input[type="number"] {
+select,
+input[type="number"] {
     flex: 1;
     background: var(--board-bg);
     color: var(--text);
@@ -80,7 +83,10 @@ button {
     cursor: pointer;
     transition: opacity 0.2s;
 }
-button:hover { opacity: 0.85; }
+
+button:hover {
+    opacity: 0.85;
+}
 
 .button-group {
     display: flex;
@@ -88,6 +94,7 @@ button:hover { opacity: 0.85; }
     gap: 1rem;
     margin-top: 1rem;
 }
+
 .board {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
@@ -112,9 +119,15 @@ button:hover { opacity: 0.85; }
     cursor: pointer;
     transition: background 0.15s;
 }
-.cell:hover { background: var(--cell-hover); }
 
-.cell.valid-move { position: relative; }
+.cell:hover {
+    background: var(--cell-hover);
+}
+
+.cell.valid-move {
+    position: relative;
+}
+
 .cell.valid-move::after {
     content: '';
     width: 10px;
@@ -122,6 +135,7 @@ button:hover { opacity: 0.85; }
     background: rgba(255, 255, 255, 0.12);
     border-radius: 50%;
 }
+
 .cell.valid-move:hover::after {
     background: rgba(233, 69, 96, 0.5);
 }
@@ -134,9 +148,18 @@ button:hover { opacity: 0.85; }
     transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     transform: scale(0);
 }
-.piece.show { transform: scale(1); }
-.piece.black { background: radial-gradient(circle at 30% 30%, #374151, var(--black-piece)); }
-.piece.white { background: radial-gradient(circle at 30% 30%, #ffffff, var(--white-piece)); }
+
+.piece.show {
+    transform: scale(1);
+}
+
+.piece.black {
+    background: radial-gradient(circle at 30% 30%, #374151, var(--black-piece));
+}
+
+.piece.white {
+    background: radial-gradient(circle at 30% 30%, #ffffff, var(--white-piece));
+}
 
 .message {
     margin-top: 1.2rem;
@@ -144,4 +167,21 @@ button:hover { opacity: 0.85; }
     font-weight: 300;
     min-height: 1.5em;
     color: #888;
+}
+
+@media (max-width: 480px) {
+    .controls {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .button-group {
+        flex-direction: column;
+        width: 100%;
+        max-width: 200px;
+    }
+
+    button {
+        width: 100%;
+    }
 }
