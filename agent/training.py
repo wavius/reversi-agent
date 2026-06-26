@@ -17,7 +17,7 @@ if __name__ == "__main__":
     model = ReversiNet().to(device)
 
     # load existing model
-    model_path = "reversi_model.pth"
+    model_path = os.path.join(os.path.dirname(__file__), "reversi_model.pth")
     if os.path.exists(model_path):
         print(f"Loading existing model from {model_path}...")
         model.load_state_dict(torch.load(model_path, map_location=device))
@@ -168,4 +168,4 @@ if __name__ == "__main__":
 
         print(f"Games {current_episode + 1} to {current_episode + NUM_ENVS}: Policy Loss: {policy_loss.item():.4f}, Value Loss: {value_loss.item():.4f}")
 
-    torch.save(model.state_dict(), "reversi_model.pth")
+    torch.save(model.state_dict(), model_path)

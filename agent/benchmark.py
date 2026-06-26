@@ -15,7 +15,8 @@ def benchmark(num_games=100):
     model = ReversiNet().to(device)
     
     try:
-        model.load_state_dict(torch.load("reversi_model.pth", map_location=device, weights_only=True))
+        model_path = os.path.join(os.path.dirname(__file__), "reversi_model.pth")
+        model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
         print("Loaded reversi_model.pth successfully.")
     except Exception as e:
         print(f"Warning: Could not load model: {e}")
