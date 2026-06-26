@@ -141,7 +141,7 @@ async function makeAIMove(alg) {
         engine.initialize(games_vec);
 
         let val = parseInt(document.getElementById("mcts-sims").value);
-        let mctsSims = isNaN(val) ? 1000 : Math.min(1000, Math.max(1, val));
+        let mctsSims = isNaN(val) ? 100 : Math.min(1000, Math.max(1, val));
         document.getElementById("mcts-sims").value = mctsSims;
         for (let sim = 0; sim < mctsSims; sim++) {
             let req = engine.prepare_evaluation();
