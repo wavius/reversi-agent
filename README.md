@@ -9,6 +9,9 @@ A PyTorch Reinforcement Learning (RL) agent running on a C++ Reversi engine, wit
 * **Neural Network:** A deep Convolutional Residual Network evaluates the board state. It outputs a policy (probabilities for each valid move) and a value (who is currently winning).
 * **MCTS (Monte Carlo Tree Search):** It searches the game tree to choose the move that maximizes the value.
 * **Training:** It learns by playing many games against itself and updating its weights to minimize the difference between its predictions and the actual game outcomes. 
+    - Currently trained on ~120k games. 
+    - Deep MCTS is computationally expensive and takes a while to train (100k games take ~8 hours on an RTX 4060).
+
 
 ## Architecture
 
