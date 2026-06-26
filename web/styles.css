@@ -45,8 +45,6 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    width: 100%;
-    max-width: 220px;
 }
 
 label {
@@ -146,21 +144,4 @@ button:hover { opacity: 0.85; }
     font-weight: 300;
     min-height: 1.5em;
     color: #888;
-}
-
-@media (max-width: 480px) {
-    .controls {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    
-    .button-group {
-        flex-direction: column;
-        width: 100%;
-        max-width: 200px;
-    }
-    
-    button {
-        width: 100%;
-    }
 }
