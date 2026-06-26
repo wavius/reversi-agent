@@ -25,3 +25,7 @@ A PyTorch Reinforcement Learning (RL) agent running on a C++ Reversi engine, wit
     * A static site built with vanilla JS and CSS.
     * Runs the ONNX neural network entirely client-side using `onnxruntime-web` with WebGL hardware acceleration.
     * Allows playing against the Agent, Minimax, or Greedy algorithms, and includes an auto-play feature to watch the Agent play against the Minimax algorithm.
+
+## Credits
+
+* The Minimax algorithm implementation was adapted from [ShengwenChang/reversi](https://github.com/ShengwenChang/reversi).
