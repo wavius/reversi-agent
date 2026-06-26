@@ -1,7 +1,6 @@
 import torch
 import random
 import reversi_env
-import agent
 import os
 from agent import ReversiNet
 from mcts import CppBatchedMCTS as BatchedMCTS

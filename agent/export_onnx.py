@@ -1,5 +1,6 @@
 import torch
 import onnx
+import os
 from agent import ReversiNet
 
 device = torch.device("cpu")
