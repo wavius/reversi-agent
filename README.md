@@ -1,46 +1,27 @@
 # Reversi RL Agent
 
-This project combines a high-performance C++ Reversi engine with a Python-based Reinforcement Learning (RL) agent, designed to beat a minimax algorithm.
+**Play the agent online here:** [wavius.github.io/reversi-agent/web/](https://wavius.github.io/reversi-agent/web/)
+
+A PyTorch Reinforcement Learning (RL) agent running on a C++ Reversi engine, with a web interface.
+
+## How the Agent Works
+
+* **Neural Network:** A deep Convolutional Residual Network evaluates the board state. It outputs a policy (probabilities for each valid move) and a value (who is currently winning).
+* **MCTS (Monte Carlo Tree Search):** It searches the game tree to choose the move that maximizes the value.
+* **Training:** It learns by playing many games against itself and updating its weights to minimize the difference between its predictions and the actual game outcomes. 
 
 ## Architecture
 
-1.  **C++ Game Engine (`engine/`)**
-    *   **Core Logic:** Implemented using **bitboards** (two 64-bit integers representing the black and white pieces). This provides extremely fast move generation and state updates, essential for RL and Minimax.
-    *   **Python Bindings:** Uses **pybind11** to expose the C++ game state and logic directly to Python as a module. This avoids the overhead of inter-process communication (pipes/sockets) and is much cleaner.
+1. **C++ Game Engine (`game/`)**
+    * **Bitboards:** The board is represented as two 64-bit integers so the game logic can use bitwise operations.
+    * **Python Bindings:** Uses `pybind11` to expose the C++ engine directly to Python for fast RL training.
+    * **WebAssembly:** Uses `emscripten` to compile the C++ engine into Wasm so the MCTS and game rules run natively in the browser.
 
-2.  **Python RL Agent (`agent/`)**
-    *   **Environment:** A custom Gym-like environment (`env.py`) that wraps the C++ pybind11 module.
-    *   **Agent:** The RL algorithm (e.g., DQN, PPO, or AlphaZero-style) implemented using PyTorch or similar libraries.
-    *   **Training Loop:** Scripts to play games, collect experiences, and train the neural network.
+2. **Python Training Pipeline (`agent/`)**
+    * Trains the ResNet model via self-play and batched MCTS.
+    * Exports the final `.pth` weights to `.onnx` for web deployment.
 
-## Proposed Directory Structure
-
-```text
-reversi-agent/
-├── CMakeLists.txt         # Build config for pybind11 module
-├── engine/                # C++ Source
-│   ├── board.h            # Bitboard representation & macros
-│   ├── game.h/.cpp        # Game rules, move generation
-│   └── bindings.cpp       # Pybind11 wrapper code
-├── agent/                 # Python Source
-│   ├── env.py             # Gym-style wrapper
-│   ├── dqn_agent.py       # RL Agent implementation
-│   └── train.py           # Training script
-├── requirements.txt       # Python dependencies
-└── README.md
-```
-
-## Implementation Phases
-
-1.  **Phase 1: The C++ Engine**
-    *   Implement bitboard logic for move generation (checking valid flips).
-    *   Implement game state management (applying moves, detecting terminal states, calculating scores).
-2.  **Phase 2: Python Bindings**
-    *   Set up CMake and `pybind11`.
-    *   Write `bindings.cpp` to expose the game state and mechanics to Python.
-    *   Compile the C++ code into a Python extension module.
-3.  **Phase 3: Python RL Environment**
-    *   Create `agent/env.py` conforming to the standard reinforcement learning interface (e.g., OpenAI Gym interface with reset, step, render).
-4.  **Phase 4: RL Agent Implementation**
-    *   Implement the chosen RL agent.
-    *   Create the training loop to play self-play games or play against a random/minimax agent to bootstrap learning.
+3. **Web Interface (`web/`)**
+    * A static site built with vanilla JS and CSS.
+    * Runs the ONNX neural network entirely client-side using `onnxruntime-web` with WebGL hardware acceleration.
+    * Allows playing against the Agent, Minimax, or Greedy algorithms, and includes an auto-play feature to watch the Agent play against the Minimax algorithm.
